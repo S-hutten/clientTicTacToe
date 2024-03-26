@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+</head>
+<body>
+    
+</body>
+</html>
+<script>
+    function hasToken() {
+        const token = localStorage.getItem("token");
+        if (token === "" || token === null) {
+            window.location.href = 'login.html';
+        } else {
+            window.location.href = "game.html"
+        }
+    }
+    hasToken();
+</script>

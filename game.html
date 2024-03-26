@@ -1,0 +1,235 @@
+<script src="https://cdnjs.cloudflare.com/ajax/libs/microsoft-signalr/6.0.1/signalr.js"></script>
+<script>
+    const token = localStorage.getItem("token");
+    const connection = new signalR.HubConnectionBuilder()
+        .withUrl("https://localhost:8123/TicTacToeHub", {
+            accessTokenFactory: () => token})
+        .configureLogging(signalR.LogLevel.Information)
+        .build();
+
+    async function start() {
+        try {
+            await connection.start();
+            console.log("SignalR Connected.");
+        } catch (err) {
+            console.log(err);
+            setTimeout(start, 5000);
+        }
+    };
+
+    connection.on("BoardUpdated", (message) => {
+        const data = JSON.parse(message);
+        const errormsg = document.getElementById("errorString");
+        const winner = data.Winner;
+        const endReason = data.GameEndedReason;
+        if (winner !== "") {
+            errormsg.textContent = "De winnaar is: " + winner;
+        } else if(endReason !== "") {
+            errormsg.textContent = endReason;
+        } else {
+            errormsg.textContent = "Game active, active player: " + data.CurrentPlayer;
+        }
+            
+        
+        
+        
+        // Extract the board array from the data
+        const boardArray = data.Board;
+
+        // Get the TicTacToeBoard element
+        const ticTacToeBoard = document.querySelector('tictactoe-board');
+
+        // If the element is found, update its game state
+        if (ticTacToeBoard) {
+            ticTacToeBoard.updateGameState(boardArray);
+        }
+    });
+
+    connection.onclose(async () => {
+        await start();
+    });
+
+
+    // Start the connection.
+    start();
+
+    function ready() {
+        const token = localStorage.getItem("token");
+        fetch(`https://localhost:8123/startgame`, {
+            method: 'GET',
+            headers: {
+                'Authorization': `Bearer ` + token
+            }
+        })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Network response was not ok');
+                }
+            })
+            .then(data => {
+                // Handle response data
+                console.log(data);
+            })
+            .catch(error => {
+                console.error('There was a problem with your fetch operation:', error);
+            });
+
+        const button = document.getElementById("rdy");
+        button.style.color = "green";
+    }
+
+    function logout() {
+        localStorage.setItem("token", "");
+        window.location.href = 'index.html';
+        console.log("S");
+    }
+
+    function leave() {
+        const token = localStorage.getItem("token");
+        fetch(`https://localhost:8123/leavegame`, {
+            method: 'GET',
+            headers: {
+                'Authorization': `Bearer ` + token
+            }
+        })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Network response was not ok');
+                }
+                const errormsg = document.getElementById("errorString");
+                errormsg.textContent = "No game";
+            })
+            .then(data => {
+                // Handle response data
+                const errormsg = document.getElementById("errorString");
+                errormsg.textContent = "No game";
+                console.log(data);
+            })
+            .catch(error => {
+                console.error('There was a problem with your fetch operation:', error);
+            });
+        
+    }
+</script>
+<script>
+    class TicTacToeBoard extends HTMLElement {
+        constructor() {
+            super();
+
+            // Create a Shadow DOM
+            this.shadow = this.attachShadow({ mode: 'open' });
+
+            // Create a tic-tac-toe board
+            const board = document.createElement('div');
+            board.classList.add('board');
+
+            for (let i = 0; i < 9; i++) {
+                const cell = document.createElement('div');
+                cell.classList.add('cell');
+                cell.dataset.index = i;
+                cell.textContent = '-';
+                cell.addEventListener('click', this.handleClick.bind(this));
+                board.appendChild(cell);
+            }
+
+            // Append the board to the Shadow DOM
+            this.shadow.appendChild(board);
+
+            const style = document.createElement('style');
+            style.textContent = `
+    .board {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        grid-gap: 5px;
+    }
+
+    .cell {
+        width: 100px;
+        height: 100px;
+        background-color: lightgray;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 24px;
+        cursor: pointer;
+    }
+
+    .cell:hover {
+        background-color: #ccc;
+    }
+`;
+            this.shadow.appendChild(style);
+        }
+
+        updateGameState(newState) {
+            const cells = this.shadow.querySelectorAll('.cell');
+            cells.forEach((cell, index) => {
+                // Update cell content with data from newState
+                cell.textContent = newState[index];
+            });
+        }
+
+        handleClick(event) {
+            const cellIndex = event.target.dataset.index;
+            this.performSet(cellIndex);
+        }
+
+        performSet(setIndex) {
+            const token = localStorage.getItem("token");
+            fetch(`https://localhost:8123/doSet?setIndex=${setIndex}`, {
+                method: 'GET',
+                headers: {
+                    'Authorization': `Bearer ` + token
+                }
+            })
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('Network response was not ok');
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    // Handle response data
+                    console.log(data);
+                    const errormsg = document.getElementById("errorString");
+                    if (data !== "") {
+                        errormsg.textContent = data;
+                    }
+                    
+                })
+                .catch(error => {
+                    console.error('There was a problem with your fetch operation:', error);
+                });
+        }
+
+
+
+        
+    }
+
+    customElements.define('tictactoe-board', TicTacToeBoard);
+</script>
+
+
+<!DOCTYPE html>
+<html>
+
+<body>
+
+    <h2>The board status</h2>
+
+    <h3 id='board'>
+    </h3>
+
+    <ul id='messageList'>
+    </ul>
+    <h2 id="errorString"></h2>
+    <tictactoe-board></tictactoe-board>
+    <button id="rdy" onclick="ready()">Start Game</button>
+    <button id="leave" onclick="leave()">leave</button> 
+    <button id="logout" onclick="logout()">logout</button>
+    
+
+</body>
+</html>
+
